@@ -375,6 +375,21 @@ interface TransactionDao {
     )
     suspend fun csvRows(): List<CsvRowRow>
 
+    @Query(
+        """
+        SELECT t.id AS id, t.date AS date, t.type AS type,
+               COALESCE(c.name, '未分类') AS category,
+               COALESCE(a.name, '') AS account,
+               t.amount_cents AS amount_cents, t.note AS note
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.category_id
+        LEFT JOIN accounts a ON a.id = t.account_id
+        WHERE t.date >= :start AND t.date < :end
+        ORDER BY t.date, t.id
+        """,
+    )
+    suspend fun csvRowsRange(start: String, end: String): List<CsvRowRow>
+
     @Query("SELECT * FROM transactions ORDER BY date, id")
     suspend fun all(): List<TransactionEntity>
 }
@@ -383,6 +398,9 @@ interface TransactionDao {
 interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE month = :month ORDER BY category_id IS NULL DESC, category_id")
     fun observeMonth(month: String): Flow<List<BudgetEntity>>
+
+    @Query("SELECT * FROM budgets WHERE month = :month ORDER BY category_id IS NULL DESC, category_id")
+    suspend fun month(month: String): List<BudgetEntity>
 
     @Query("SELECT * FROM budgets ORDER BY month, category_id")
     suspend fun all(): List<BudgetEntity>

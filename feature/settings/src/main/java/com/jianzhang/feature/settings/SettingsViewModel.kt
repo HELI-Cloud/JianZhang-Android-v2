@@ -84,10 +84,19 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun saveAi(endpoint: String, apiKey: String, model: String, temperature: String, timeout: String) {
-        val temp = temperature.toDoubleOrNull()?.coerceIn(0.0, 1.5) ?: 0.35
+        val parsedTemperature = temperature.toDoubleOrNull()
+        val temp = if (parsedTemperature != null && parsedTemperature.isFinite()) {
+            parsedTemperature.coerceIn(0.0, 1.5)
+        } else {
+            0.35
+        }
         val seconds = timeout.toIntOrNull()?.coerceIn(5, 120) ?: 90
         if (endpoint.isBlank() || model.isBlank()) {
             error.value = "接口地址与模型名称不能为空"
+            return
+        }
+        if (!endpoint.trim().startsWith("http://") && !endpoint.trim().startsWith("https://")) {
+            error.value = "接口地址必须以 http:// 或 https:// 开头"
             return
         }
         viewModelScope.launch {

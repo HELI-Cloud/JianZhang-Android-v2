@@ -1,4 +1,4 @@
-# 简账 1.0.1（versionCode 10）发布记录
+# 简账 1.0.3（versionCode 12）发布记录
 
 构建日期：2026-10-17
 包名：`com.jianzhang.app`
@@ -6,48 +6,53 @@ minSdk：26 · targetSdk：35
 签名证书：`CN=JianZhang, OU=HELISEC, O=JianZhang, L=Local, ST=Local, C=CN`
 证书 SHA-256：`4f368a27fc384cabdcc34f2e5fa5b82e3528a998f8555601cbc79402ceef0aed`
 
-## 1.0.1 修复
+## 1.0.3 修复：AI 分析闪退
 
 ### 现象
 
-输入应用锁密码后持续转圈，界面在启动页与账本之间反复闪烁，无法进入主界面。
+进入账本「AI 分析」并开始分析后，应用闪退。
 
-### 根因
+### 根因状态
 
-`core/data/.../DatabaseBootstrap.kt` 的启动逻辑不幂等：
+本次修复时 `adb devices` 无连接设备，未取得崩溃瞬间的 logcat，因此**根因未由堆栈直接确认**。
 
-1. 每个 `LedgerRepository` Flow 被收集时都会调用 `bootstrap.await()`。
-2. `await()` 每次都调用 `start()`。
-3. `start()` 只用 `job?.isActive` 判断；首次初始化完成后 job 已结束，于是再次启动 `initialize()`。
-4. `initialize()` 把状态重置为 `Loading`，根界面切回启动页并销毁 NavHost。
-5. 初始化完成回到 `Ready`，NavHost 重建并再次收集 Flow，再次触发初始化。
+已确认的高风险路径：
 
-形成 `Loading → Ready → Loading` 的无限循环，表现为持续转圈与整屏闪烁。
+1. 旧实现通过 OkHttp 异步回调 + 顶层 `Call.await()` 扩展完成请求；R8 mapping 中该扩展所属的 `AiAnalyzerKt` 被标记为 `R8$$REMOVED$$CLASS$$549`，存在 release 混淆/内联后回调异常的风险。
+2. `buildContext()` 在 ViewModel 的默认调度器上读取数据库，并每次读取全部流水；大账本会造成主线程阻塞、ANR 或内存压力。
+3. `observeBudgets(month).first()` 任一失败都会终止整个分析。
+4. `AnalysisViewModel` 只捕获 `Exception`；release 下的 `LinkageError` 等会直接崩溃。
 
-### 修复
+### 修复内容
 
-- 新增 `BootstrapStartGate`：同一进程内只允许一次初始化，并发调用只有一个赢家。
-- `await()` 在数据库已打开时直接返回实例，不再触碰启动状态。
-- `initialize()` 在锁内二次检查实例，天然幂等。
-- `retry()` 仅在初始化失败且当前没有运行中的任务时重置 gate 并重试；已就绪的数据库不会被关闭或重开。
-- 初始化被取消时正确抛出 `CancellationException`，不再误记为 `Failed`。
-- 不再把重新初始化产生的 `Loading` 推给 UI。
+- 移除 AI 调用链中的 OkHttp，改用平台 `HttpURLConnection`，删除顶层 `Call.await()` 扩展。
+- 数据库查询与网络请求全部切到 `Dispatchers.IO`。
+- 新增范围查询 `TransactionDao.csvRowsRange(start, end)`，只读取所选时间窗口，不再全表加载。
+- 新增 `BudgetDao.month(month)` 挂起查询；预算查询失败时降级为空预算，`CancellationException` 继续透传。
+- `AnalysisViewModel` 捕获 `Throwable`，写入 `Log.e` 并显示可读错误，不再让分析失败直接杀死进程。
+- 新增 `AiAnalysisService` 接口与 Hilt 绑定，隔离 UI 与网络传输，便于替换和测试。
+- 新增请求策略：接口地址规范化、temperature/timeout 边界、网络错误友好提示。
+- 响应读取上限 512,000 字符，结果上限 32,000 字符，超出部分截断并提示，避免超长响应拖垮 Compose 文本渲染。
+- 新增 `CrashReporter`：未捕获异常写入 `filesDir/crash/last-crash.txt` 后再交给系统默认处理器。
+- 新增 R8 keep 规则，保留 `AiRequestPolicy` 错误路径辅助类，避免再次被整体移除。
+- `SettingsViewModel.saveAi()` 校验 endpoint 与非有限 temperature。
 
 ## 产物
 
 | 文件 | 说明 |
 |---|---|
-| `dist/jianzhang-1.0.1-v10-release.apk` | 已签名、已 R8 压缩的发布包 |
-| `dist/mapping-1.0.1-v10.txt` | R8 混淆映射，崩溃回溯用 |
+| `dist/jianzhang-1.0.3-v12-release.apk` | 已签名、已 R8 压缩的发布包 |
+| `dist/mapping-1.0.3-v12.txt` | R8 混淆映射，崩溃回溯用 |
 | `dist/SHA256SUMS.txt` | 产物校验值 |
 
 APK SHA-256：
 
 ```text
-5fd0eaf38be51f4ddc73320222015cc7a6d2d3a15e915831ef958c328d5cd63f
+958C710D3D2BE118F42F53169AFF4CCD0E41BF7DBC1E30E733F5724DCC386591
 ```
 
-APK 大小：9,788,282 字节。
+APK 大小：9,706,362 字节。
+mapping 大小：42,287,021 字节。
 
 ## 已验证
 
@@ -56,33 +61,33 @@ APK 大小：9,788,282 字节。
 | `:app:assembleDebug` | 通过 |
 | `:app:assembleRelease`（R8 + 资源压缩） | 通过 |
 | `:app:lintDebug` | 0 errors / 6 warnings（均为依赖有新版本） |
-| `:core:common:testDebugUnitTest` | 20 tests，0 失败 |
-| `:core:data:testDebugUnitTest` | 20 tests，0 失败（含新增 `BootstrapStartGateTest` 3 项） |
-| `:core:database:testDebugUnitTest` | 4 tests，0 失败 |
+| 单元测试合计 | 48 tests，0 失败（analysis 4、common 20、data 20、database 4） |
+| R8 mapping 检查 | 0 处 `okhttp3`；`AiRequestPolicy` 已保留 |
 | `apksigner verify` | 通过，v2 + v3 有效，v1 关闭 |
-| 包信息 | `versionCode=10`、`versionName=1.0.1`、`applicationId=com.jianzhang.app` |
-| 数据库结构 | Room version 4，无迁移变更 |
-| 签名证书 | 与 1.0.0 一致，可覆盖安装 |
+| 包信息 | `versionCode=12`、`versionName=1.0.3`、`applicationId=com.jianzhang.app` |
+| 签名证书 | 与 1.0.0/1.0.1/1.0.2 一致，可覆盖安装 |
+| 数据库结构 | 无 schema 变更，覆盖安装保留数据 |
 
-## 未验证（发布前必须补）
+## 未验证
 
 | 项目 | 原因 / 下一步 |
 |---|---|
-| 真机解锁流程 | 构建时 `adb devices` 无连接设备；需安装后实测“开锁 → 进入概览”不再闪烁 |
+| 真机 AI 分析全流程 | 构建时 `adb devices` 无连接设备；需安装 v12 后实测未配置 Key、错误 Key、正确 Key、超时、取消、切换月份/范围/重点 |
 | 旧数据原地迁移 | 需在装过旧版的设备上验收账户、流水、预算、标签、周期规则 |
 | 系统通知投递 | 需 API 33+ 真机授权 `POST_NOTIFICATIONS` 后验收 |
-| API 26 / 30 / 35 矩阵 | 需模拟器或真机；重点看底栏 inset、字号 0.85/1.3、键盘弹出 |
-| 5 万条流水性能 | 分页单测覆盖有限条数，未跑 5 万条基准 |
+| 大账本性能 | 已消除全表读取，但未跑 5 万条流水基准 |
 
 ## 安装
 
 ```powershell
-adb install -r dist\jianzhang-1.0.1-v10-release.apk
+adb install -r dist\jianzhang-1.0.3-v12-release.apk
 ```
 
 覆盖安装保留应用数据。卸载会删除本地账本，操作前先导出加密备份。
 
 ## 版本历史
 
+- 1.0.3 / versionCode 12：修复 AI 分析闪退高风险路径，移除 OkHttp 回调链，范围查询，Throwable 兜底，响应长度上限，新增崩溃留痕。
+- 1.0.2 / versionCode 11：AI 分析传输与数据处理加固（未包含 1.0.3 的最后补丁）。
 - 1.0.1 / versionCode 10：修复解锁后 `DatabaseBootstrap` 重复初始化导致的转圈与闪烁。
 - 1.0.0 / versionCode 9：底层重构、02 刻度 UI、液态玻璃底栏、全功能迁移。

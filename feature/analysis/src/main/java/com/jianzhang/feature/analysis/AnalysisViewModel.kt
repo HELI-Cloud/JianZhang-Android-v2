@@ -1,5 +1,6 @@
 package com.jianzhang.feature.analysis
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jianzhang.core.data.SettingsStore
@@ -28,7 +29,7 @@ data class AnalysisUiState(
 
 @HiltViewModel
 class AnalysisViewModel @Inject constructor(
-    private val analyzer: AiAnalyzer,
+    private val analyzer: AiAnalysisService,
     settingsStore: SettingsStore,
 ) : ViewModel() {
     val settings = settingsStore.settings.stateIn(
@@ -74,10 +75,13 @@ class AnalysisViewModel @Inject constructor(
             } catch (cancel: CancellationException) {
                 _state.value = _state.value.copy(loading = false)
                 throw cancel
-            } catch (error: Exception) {
+            } catch (error: Throwable) {
+                // Throwable, not Exception: release-only LinkageError/OOM must
+                // become a visible message instead of a process crash.
+                Log.e(TAG, "AI analysis failed", error)
                 _state.value = _state.value.copy(
                     loading = false,
-                    error = error.message ?: "分析失败，请稍后重试",
+                    error = AiRequestPolicy.friendlyError(error),
                 )
             }
         }
@@ -87,5 +91,9 @@ class AnalysisViewModel @Inject constructor(
         job?.cancel()
         job = null
         _state.value = _state.value.copy(loading = false)
+    }
+
+    private companion object {
+        const val TAG = "AnalysisViewModel"
     }
 }

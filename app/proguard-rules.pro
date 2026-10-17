@@ -19,3 +19,5 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep,includedescriptorclasses class com.jianzhang.**$$serializer { *; }
+# AI analysis policy: error-path helpers must not be removed or inlined away.
+-keep class com.jianzhang.feature.analysis.AiRequestPolicy { *; }

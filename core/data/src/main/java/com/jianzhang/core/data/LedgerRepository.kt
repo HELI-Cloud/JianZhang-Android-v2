@@ -259,6 +259,9 @@ class LedgerRepository private constructor(
         it.budgetDao().observeMonth(month.toString())
     }.map { list -> list.map { entity -> entity.toDomain() } }
 
+    suspend fun budgets(month: YearMonth): List<Budget> =
+        database().budgetDao().month(month.toString()).map { it.toDomain() }
+
     fun observeCategoryTotals(month: YearMonth, type: TxnType = TxnType.EXPENSE): Flow<List<CategoryTotal>> {
         val (start, end) = Dates.monthRange(month)
         return observeCategoryTotals(start, end, type)
@@ -706,16 +709,21 @@ class LedgerRepository private constructor(
     // ---------- 备份 / CSV ----------
 
     suspend fun csvRows(): List<CsvRow> = database().transactionDao().csvRows().map { row ->
-        CsvRow(
-            id = row.id,
-            date = row.date,
-            type = row.type,
-            category = row.category,
-            account = row.account,
-            amountCents = row.amountCents,
-            note = row.note,
-        )
+        row.toDomain()
     }
+
+    suspend fun csvRows(start: String, end: String): List<CsvRow> =
+        database().transactionDao().csvRowsRange(start, end).map { row -> row.toDomain() }
+
+    private fun com.jianzhang.core.database.CsvRowRow.toDomain(): CsvRow = CsvRow(
+        id = id,
+        date = date,
+        type = type,
+        category = category,
+        account = account,
+        amountCents = amountCents,
+        note = note,
+    )
 
     suspend fun buildCsv(): String {
         val sb = StringBuilder()
