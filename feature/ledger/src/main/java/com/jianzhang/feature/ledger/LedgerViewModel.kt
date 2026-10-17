@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -38,6 +39,7 @@ sealed interface LedgerEntry {
 data class LedgerUiState(
     val month: YearMonth = YearMonth.now(),
     val type: TxnType? = null,
+    val transfersOnly: Boolean = false,
     val accountId: Long? = null,
     val tagId: Long? = null,
     val query: String = "",
@@ -55,6 +57,7 @@ data class LedgerUiState(
 private data class Filter(
     val month: YearMonth,
     val type: TxnType?,
+    val transfersOnly: Boolean,
     val accountId: Long?,
     val tagId: Long?,
     val query: String,
@@ -74,14 +77,17 @@ class LedgerViewModel @Inject constructor(
 ) : ViewModel() {
     private val month = MutableStateFlow(YearMonth.now())
     private val type = MutableStateFlow<TxnType?>(null)
+    private val transfersOnly = MutableStateFlow(false)
     private val account = MutableStateFlow<Long?>(null)
     private val tag = MutableStateFlow<Long?>(null)
     private val query = MutableStateFlow("")
 
     val selected = MutableStateFlow<Set<Long>>(emptySet())
 
-    private val filter = combine(month, type, account, tag, query.debounce(220)) { month, type, account, tag, query ->
-        Filter(month, type, account, tag, query.trim())
+    private val typeOrTransfer = combine(type, transfersOnly) { type, only -> type to only }
+
+    private val filter = combine(month, typeOrTransfer, account, tag, query.debounce(220)) { month, type, account, tag, query ->
+        Filter(month, type.first, type.second, account, tag, query.trim())
     }
 
     /**
@@ -90,6 +96,9 @@ class LedgerViewModel @Inject constructor(
      * whole month into memory.
      */
     val entries: Flow<PagingData<LedgerEntry>> = filter.flatMapLatest { f ->
+        if (f.transfersOnly) {
+            return@flatMapLatest flowOf(PagingData.empty<LedgerEntry>())
+        }
         val (start, end) = Dates.monthRange(f.month)
         repository.filteredPager(start, end, f.type, f.accountId, f.tagId, f.query)
             .map { paging ->
@@ -137,6 +146,7 @@ class LedgerViewModel @Inject constructor(
         LedgerUiState(
             month = f.month,
             type = f.type,
+            transfersOnly = f.transfersOnly,
             accountId = f.accountId,
             tagId = f.tagId,
             query = f.query,
@@ -152,7 +162,15 @@ class LedgerViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LedgerUiState())
 
-    fun setType(value: TxnType?) { type.value = value }
+    fun setType(value: TxnType?) {
+        transfersOnly.value = false
+        type.value = value
+    }
+
+    fun setTransfersOnly() {
+        type.value = null
+        transfersOnly.value = true
+    }
     fun setAccount(value: Long?) { account.value = value }
     fun setTag(value: Long?) { tag.value = value }
     fun setQuery(value: String) { query.value = value }

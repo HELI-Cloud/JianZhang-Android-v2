@@ -17,7 +17,7 @@ minSdk：26 · targetSdk：35
 APK SHA-256：
 
 ```text
-39af8351d50cd523576b46d9d591bbfb700f14dc35f451955fd93d9cf8185340
+56ec738ef897bcb5b4b4606868fcfd4754ab395982ecb5987b21cc8345a5cfbd
 ```
 
 ## 1.0 范围

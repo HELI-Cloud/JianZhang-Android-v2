@@ -86,7 +86,11 @@ fun LedgerScreen(
         Column(Modifier.padding(horizontal = Jz.space.page)) {
             PageHeader(
                 title = "流水",
-                subtitle = if (state.totalCount == 0) "本月还没有记录" else "本月 ${state.totalCount} 笔 · 支出 ${Money.format(state.expense)}",
+                subtitle = when {
+                    state.transfersOnly -> "本月 ${state.transfers.size} 笔转账"
+                    state.totalCount == 0 -> "本月还没有记录"
+                    else -> "本月 ${state.totalCount} 笔 · 支出 ${Money.format(state.expense)}"
+                },
                 trailing = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -113,7 +117,7 @@ fun LedgerScreen(
                     }
                 },
             )
-            TypeFilter(state.type, viewModel::setType)
+            TypeFilter(state.type, state.transfersOnly, viewModel::setType, viewModel::setTransfersOnly)
             if (state.accounts.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 AccountFilter(
@@ -170,11 +174,15 @@ fun LedgerScreen(
                 }
             }
             entries.itemCount == 0 && entries.loadState.refresh is LoadState.NotLoading && state.transfers.isEmpty() -> {
-                EmptyState("没有匹配的流水", "换个月份或筛选条件试试")
+                if (state.transfersOnly) {
+                    EmptyState("本月没有转账", "在账户页可以发起账户间转账")
+                } else {
+                    EmptyState("没有匹配的流水", "换个月份或筛选条件试试")
+                }
             }
             else -> {
                 LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
-                if (state.transfers.isNotEmpty() && state.type == null && state.accountId == null && state.tagId == null && state.query.isBlank()) {
+                if (state.transfers.isNotEmpty() && (state.transfersOnly || (state.type == null && state.accountId == null && state.tagId == null && state.query.isBlank()))) {
                     item(key = "transfer-header") {
                         Row(
                             Modifier.fillMaxWidth().padding(start = Jz.space.page, end = Jz.space.page, top = 16.dp, bottom = 6.dp),
@@ -198,7 +206,7 @@ fun LedgerScreen(
                         )
                     }
                 }
-                items(count = entries.itemCount) { index ->
+                if (!state.transfersOnly) items(count = entries.itemCount) { index ->
                     when (val entry = entries[index]) {
                         is LedgerEntry.DateHeader -> {
                             val date = entry.date
@@ -425,14 +433,20 @@ private fun TransferRow(transfer: Transfer, accounts: List<Account>, onDelete: (
 }
 
 @Composable
-private fun TypeFilter(type: TxnType?, onChange: (TxnType?) -> Unit) {
+private fun TypeFilter(
+    type: TxnType?,
+    transfersOnly: Boolean,
+    onChange: (TxnType?) -> Unit,
+    onTransfers: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().border(1.dp, Jz.colors.line).background(Jz.colors.track).padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        FilterCell("全部", type == null, Modifier.weight(1f)) { onChange(null) }
+        FilterCell("全部", type == null && !transfersOnly, Modifier.weight(1f)) { onChange(null) }
         FilterCell("支出", type == TxnType.EXPENSE, Modifier.weight(1f)) { onChange(TxnType.EXPENSE) }
         FilterCell("收入", type == TxnType.INCOME, Modifier.weight(1f)) { onChange(TxnType.INCOME) }
+        FilterCell("转账", transfersOnly, Modifier.weight(1f), onClick = onTransfers)
     }
 }
 
