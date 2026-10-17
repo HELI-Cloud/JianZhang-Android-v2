@@ -1,0 +1,1 @@
+// Deprecated alias; compose is applied by the library/application conventions.

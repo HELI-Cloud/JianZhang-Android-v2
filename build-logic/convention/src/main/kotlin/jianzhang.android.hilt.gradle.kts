@@ -1,0 +1,1 @@
+// Deprecated alias; Hilt is applied by the feature/application conventions.
