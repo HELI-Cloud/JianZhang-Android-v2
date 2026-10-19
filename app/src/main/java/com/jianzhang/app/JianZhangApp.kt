@@ -8,5 +8,6 @@ class JianZhangApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter.install(this)
+        NotificationCenter.ensureChannels(this)
     }
 }

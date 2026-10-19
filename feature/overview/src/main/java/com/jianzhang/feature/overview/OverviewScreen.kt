@@ -39,6 +39,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.sp
@@ -77,10 +79,11 @@ fun OverviewScreen(
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item {
-            PageHeader(
-                title = "刻度",
-                subtitle = "把每一笔，放回它该在的位置",
-                trailing = {
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                PageHeader(
+                    title = "刻度",
+                    subtitle = "把每一笔，放回它该在的位置",
+                    trailing = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Outlined.ChevronLeft,
@@ -102,7 +105,8 @@ fun OverviewScreen(
                         )
                     }
                 },
-            )
+                )
+            }
         }
         item {
             Column(
@@ -133,101 +137,193 @@ fun OverviewScreen(
                 Sparkline(state.dailyExpenses, Modifier.fillMaxWidth().height(42.dp).padding(top = 8.dp))
             }
         }
-        item { SectionTitle("近 6 月", "点按折线读数") }
+        item {
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                SectionTitle("近 6 月", "点按折线读数")
+            }
+        }
         item { SixMonthTrend(state.monthlyTrend) }
         item {
-            SectionTitle("本月预算", if (state.totalBudgetCents > 0) "${Dates.daysLeftInMonth()} 天" else "未设置")
-            if (state.totalBudgetCents <= 0) {
-                Row(
-                    Modifier.fillMaxWidth().clickable(onClick = onOpenBudget).padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("还没有预算", color = Jz.colors.ink2, modifier = Modifier.weight(1f))
-                    Text("去设置", color = Jz.colors.accent, style = MaterialTheme.typography.labelLarge)
-                }
-            } else {
-                GaugeBar(progress = state.budgetProgress, over = state.budgetProgress > 1f)
-                Spacer(Modifier.height(4.dp))
-                GaugeScale(listOf("0", Money.format(state.totalBudgetCents / 4, false), Money.format(state.totalBudgetCents / 2, false), Money.format(state.totalBudgetCents * 3 / 4, false), Money.format(state.totalBudgetCents, false)))
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        if (state.budgetProgress > 1f) "已超支 ${Money.format(-state.budgetRemaining)}" else "已用 ${Money.format((state.budgetProgress * 100).toLong())}%",
-                        color = if (state.budgetProgress > 1f) Jz.colors.expense else Jz.colors.ink2,
-                        style = MaterialTheme.typography.bodyMedium,
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                SectionTitle("本月预算", if (state.totalBudgetCents > 0) "${Dates.daysLeftInMonth()} 天" else "未设置")
+                if (state.totalBudgetCents <= 0) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable(onClick = onOpenBudget).padding(vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("还没有预算", color = Jz.colors.ink2, modifier = Modifier.weight(1f))
+                        Text("去设置", color = Jz.colors.accent, style = MaterialTheme.typography.labelLarge)
+                    }
+                } else {
+                    GaugeBar(progress = state.budgetProgress, over = state.budgetProgress > 1f)
+                    Spacer(Modifier.height(5.dp))
+                    GaugeScale(
+                        listOf(
+                            "0",
+                            Money.formatAxis(state.totalBudgetCents / 2),
+                            Money.formatAxis(state.totalBudgetCents),
+                        ),
                     )
-                    Text("日均可用 ${Money.format(state.dailyAvailable)}", color = Jz.colors.ink2, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (state.budgetRows.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    state.budgetRows.take(4).forEach { row ->
-                        val progress = if (row.amountCents <= 0) 0f else row.spentCents.toFloat() / row.amountCents
-                        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(row.name, color = Jz.colors.ink2, modifier = Modifier.width(62.dp), style = MaterialTheme.typography.bodyMedium)
-                            Box(Modifier.weight(1f)) { GaugeBar(progress, height = 10.dp, ticks = 8, over = progress > 1f) }
-                            Text(
-                                Money.format(row.spentCents),
-                                color = if (progress > 1f) Jz.colors.expense else Jz.colors.ink,
-                                modifier = Modifier.width(78.dp).padding(start = 8.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = FontFamily.Monospace,
-                            )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = if (state.budgetProgress > 1f) {
+                                "已超支 ${Money.format(-state.budgetRemaining)}"
+                            } else {
+                                "已用 ${(state.budgetProgress * 100).roundToInt().coerceAtLeast(0)}%"
+                            },
+                            color = if (state.budgetProgress > 1f) Jz.colors.expense else Jz.colors.ink2,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "日均可用 ${Money.format(state.dailyAvailable)}",
+                            color = Jz.colors.ink2,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.End,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (state.budgetRows.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        state.budgetRows.take(4).forEach { row ->
+                            val progress = if (row.amountCents <= 0) 0f else row.spentCents.toFloat() / row.amountCents
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = row.name,
+                                    color = Jz.colors.ink2,
+                                    modifier = Modifier.weight(0.30f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Box(Modifier.weight(0.42f).padding(horizontal = 8.dp)) {
+                                    GaugeBar(progress, height = 10.dp, ticks = 8, over = progress > 1f)
+                                }
+                                Text(
+                                    text = Money.formatCompact(row.spentCents),
+                                    color = if (progress > 1f) Jz.colors.expense else Jz.colors.ink,
+                                    modifier = Modifier.weight(0.28f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = FontFamily.Monospace,
+                                    textAlign = TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        item { SectionTitle("分类占比", "点按扇区读数") }
+        item {
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                SectionTitle("分类占比", "点按扇区读数")
+            }
+        }
         if (state.categoryTotals.isNotEmpty()) {
             item { CategoryDonut(state.categoryTotals) }
         }
-        item { SectionTitle("分类明细", "按金额排序") }
+        item {
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                SectionTitle("分类明细", "按金额排序")
+            }
+        }
         if (state.categoryTotals.isEmpty()) {
-            item { EmptyState("本月还没有支出", "记下第一笔，刻度就会开始移动") }
+            item {
+                EmptyState(
+                    "本月还没有支出",
+                    "记下第一笔，刻度就会开始移动",
+                    modifier = Modifier.padding(horizontal = Jz.space.page),
+                )
+            }
         } else {
             items(state.categoryTotals.take(8), key = { it.categoryId ?: -1L }) { total ->
                 val max = state.categoryTotals.maxOfOrNull { it.amountCents }?.coerceAtLeast(1) ?: 1
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = Jz.space.page, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(total.name, color = Jz.colors.ink2, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(62.dp))
-                    Box(Modifier.weight(1f)) { GaugeBar(total.amountCents.toFloat() / max, height = 12.dp, ticks = 16) }
                     Text(
-                        Money.format(total.amountCents),
+                        text = total.name,
+                        color = Jz.colors.ink2,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(0.30f),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Box(Modifier.weight(0.42f).padding(horizontal = 8.dp)) {
+                        GaugeBar(total.amountCents.toFloat() / max, height = 12.dp, ticks = 16)
+                    }
+                    Text(
+                        text = Money.formatCompact(total.amountCents),
                         color = Jz.colors.ink,
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.width(80.dp).padding(start = 8.dp),
+                        modifier = Modifier.weight(0.28f),
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
-        item { SectionTitle("今天", "最近 ${state.recent.size} 笔") }
+        item {
+            Column(Modifier.padding(horizontal = Jz.space.page)) {
+                SectionTitle("今天", "最近 ${state.recent.size} 笔")
+            }
+        }
         if (state.recent.isEmpty()) {
             item {
-                EmptyState("还没有流水", "点底部的 + 记第一笔", action = {
+                EmptyState(
+                    "还没有流水",
+                    "点底部的 + 记第一笔",
+                    modifier = Modifier.padding(horizontal = Jz.space.page),
+                    action = {
                     Text("记一笔", color = Jz.colors.accent, modifier = Modifier.clickable(onClick = onOpenRecord), style = MaterialTheme.typography.labelLarge)
-                })
+                    },
+                )
             }
         } else {
             items(state.recent, key = { it.txn.id }) { row ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { onEdit(row.txn.id) }.padding(vertical = 11.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onEdit(row.txn.id) }
+                        .padding(horizontal = Jz.space.page, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).padding(end = 10.dp)) {
                         Text(
                             row.txn.note.ifBlank { row.categoryName },
                             style = MaterialTheme.typography.titleMedium,
                             color = Jz.colors.ink,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             "${Dates.weekday(row.txn.date)} · ${row.categoryName}${row.accountName?.let { " · $it" } ?: ""}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Jz.colors.ink3,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -235,7 +331,7 @@ fun OverviewScreen(
                         Text(Dates.iso(row.txn.date).substring(5), style = MaterialTheme.typography.labelSmall, color = Jz.colors.ink3)
                     }
                 }
-                JzDivider()
+                JzDivider(Modifier.padding(horizontal = Jz.space.page))
             }
         }
     }

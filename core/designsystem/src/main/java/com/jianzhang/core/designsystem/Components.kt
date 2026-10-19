@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,10 +91,22 @@ fun PageHeader(
         verticalAlignment = Alignment.Bottom,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineLarge, color = Jz.colors.ink)
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineLarge,
+                color = Jz.colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (subtitle != null) {
                 Spacer(Modifier.height(5.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Jz.colors.ink2)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Jz.colors.ink2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         trailing?.invoke()
@@ -112,7 +125,16 @@ fun SectionTitle(title: String, right: String? = null, modifier: Modifier = Modi
             color = Jz.colors.ink2,
             modifier = Modifier.weight(1f),
         )
-        if (right != null) Text(right, style = MaterialTheme.typography.bodyMedium, color = Jz.colors.ink3)
+        if (right != null) {
+            Text(
+                right,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Jz.colors.ink3,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
     JzDivider()
 }
@@ -155,6 +177,9 @@ fun AmountText(
         fontSize = if (large) 40.sp else 15.sp,
         letterSpacing = if (large) (-0.6).sp else 0.sp,
         textAlign = TextAlign.End,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -185,8 +210,30 @@ fun GaugeBar(
 
 @Composable
 fun GaugeScale(labels: List<String>, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        labels.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = Jz.colors.ink3) }
+    if (labels.isEmpty()) return
+    Row(modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        labels.forEachIndexed { index, label ->
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    letterSpacing = 0.sp,
+                ),
+                color = Jz.colors.ink2,
+                textAlign = when {
+                    labels.size == 1 -> TextAlign.Center
+                    index == 0 -> TextAlign.Start
+                    index == labels.lastIndex -> TextAlign.End
+                    else -> TextAlign.Center
+                },
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -475,7 +522,15 @@ fun MetricRow(label: String, value: String, valueColor: Color = Jz.colors.ink) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = Jz.colors.ink2, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, fontFamily = FontFamily.Monospace)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            color = valueColor,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

@@ -1,6 +1,7 @@
 package com.jianzhang.app
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jianzhang.core.data.BootstrapState
@@ -62,7 +63,8 @@ class AppViewModel @Inject constructor(
         bootstrap.start()
         viewModelScope.launch {
             settingsStore.settings.distinctUntilChanged().collect { settings ->
-                ReminderScheduler.sync(context, settings)
+                runCatching { ReminderScheduler.sync(context, settings) }
+                    .onFailure { Log.w("JianZhangReminder", "Unable to sync reminder schedule", it) }
             }
         }
     }

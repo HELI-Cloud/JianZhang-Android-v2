@@ -1,8 +1,13 @@
 package com.jianzhang.feature.planning
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -31,6 +36,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,8 +45,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jianzhang.core.designsystem.EmptyState
 import com.jianzhang.core.designsystem.Jz
@@ -65,16 +75,22 @@ fun ReminderScreen(
     var showTime by remember { mutableStateOf(false) }
     val error by viewModel.error.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var notificationsGranted by remember {
-        mutableStateOf(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-                PackageManager.PERMISSION_GRANTED,
-        )
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var notificationsGranted by remember { mutableStateOf(notificationsAllowed(context)) }
+    var exactAlarmGranted by remember { mutableStateOf(canScheduleExactAlarms(context)) }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsGranted = notificationsAllowed(context)
+                exactAlarmGranted = canScheduleExactAlarms(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> notificationsGranted = granted }
+    ) { notificationsGranted = notificationsAllowed(context) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -112,11 +128,33 @@ fun ReminderScreen(
                             )
                         }
                         Spacer(Modifier.width(10.dp))
-                        JzOutlinedButton("去开启", onClick = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                        })
+                        JzOutlinedButton("打开设置", onClick = { openNotificationSettings(context) })
+                    }
+                }
+            }
+        }
+        if (settings.systemNotify && !exactAlarmGranted && hasAnyReminder(settings)) {
+            item {
+                Column(Modifier.padding(horizontal = Jz.space.page)) {
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Jz.colors.surface)
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("精准提醒未开启", style = MaterialTheme.typography.titleMedium, color = Jz.colors.ink)
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                "系统可能延迟每日检查。允许“闹钟和提醒”后可准时送达。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Jz.colors.ink3,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        JzOutlinedButton("去开启", onClick = { openExactAlarmSettings(context) })
                     }
                 }
             }
@@ -136,8 +174,15 @@ fun ReminderScreen(
                 FlagLine("每周小结", "每周固定一天回顾账本", settings.weeklyReminder) {
                     viewModel.saveReminderSettings(settings.copy(weeklyReminder = it))
                 }
-                FlagLine("系统通知", "通过通知栏送达提醒", settings.systemNotify) {
-                    viewModel.saveReminderSettings(settings.copy(systemNotify = it))
+                FlagLine(
+                    label = "系统通知",
+                    caption = if (notificationsGranted) "通过通知栏送达提醒" else "权限未开启，提醒不会出现",
+                    checked = settings.systemNotify,
+                ) { enabled ->
+                    viewModel.saveReminderSettings(settings.copy(systemNotify = enabled))
+                    if (enabled && !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 }
                 Row(
                     Modifier.fillMaxWidth().clickable { showTime = true }.padding(vertical = 14.dp),
@@ -227,6 +272,41 @@ fun ReminderScreen(
             confirmButton = { TextButton(onClick = viewModel::clearError) { Text("知道了") } },
         )
     }
+}
+
+private fun notificationsAllowed(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return false
+    }
+    return NotificationManagerCompat.from(context).areNotificationsEnabled()
+}
+
+private fun canScheduleExactAlarms(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+
+private fun hasAnyReminder(settings: AppSettings): Boolean =
+    settings.budgetAlert || settings.billAlert || settings.dailyReminder || settings.weeklyReminder
+
+private fun openNotificationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
+}
+
+private fun openExactAlarmSettings(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+        data = Uri.parse("package:${context.packageName}")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
 }
 
 private fun weekdayIndex(stored: Int): Int = if (stored == 0) 6 else (stored - 1).coerceIn(0, 6)

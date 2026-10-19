@@ -44,6 +44,17 @@ object Money {
         return scaled + suffix
     }
 
+    /**
+     * Compact whole-yuan label for a gauge axis. Under 10,000 yuan the label
+     * keeps grouping separators; above that it switches to 万/亿 so a 320dp
+     * phone can show three labels without wrapping.
+     */
+    fun formatAxis(cents: Long): String {
+        if (kotlin.math.abs(cents) >= 1_000_000L) return formatCompact(cents)
+        val yuan = BigDecimal.valueOf(cents, 2).setScale(0, RoundingMode.HALF_UP)
+        return DecimalFormat("#,##0", symbols).format(yuan)
+    }
+
     fun parseToCents(raw: String): Long? {
         val text = raw.trim().replace(",", "").removePrefix("¥").removePrefix("￥")
         if (text.isEmpty()) return null

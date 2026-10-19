@@ -34,6 +34,15 @@ class MoneyTest {
     }
 
     @Test
+    fun `formatAxis keeps short labels and switches to compact units`() {
+        assertThat(Money.formatAxis(0L)).isEqualTo("0")
+        assertThat(Money.formatAxis(123_456L)).isEqualTo("1,235")
+        assertThat(Money.formatAxis(999_999L)).isEqualTo("10,000")
+        assertThat(Money.formatAxis(1_000_000L)).isEqualTo("1万")
+        assertThat(Money.formatAxis(12_345_600L)).isEqualTo("12.3万")
+    }
+
+    @Test
     fun `formatCompact converts cents to wan and yi correctly`() {
         assertThat(Money.formatCompact(0L)).isEqualTo("0.00")
         assertThat(Money.formatCompact(999_999L)).isEqualTo("9,999.99")
