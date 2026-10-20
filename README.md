@@ -27,11 +27,8 @@ feature/
 ## 构建
 
 ```powershell
-$env:JAVA_HOME='D:\700-AI\.tools\jdk21\jdk-21.0.12+8'
-$env:GRADLE_USER_HOME='D:\700-AI\.tools\gradle-home'
-cd D:\700-AI\JianZhang-Android-v2
-D:\700-AI\.tools\gradle\gradle-8.14.3\bin\gradle.bat `
-  :app:assembleDebug :app:assembleRelease :app:lintDebug `
+$env:JAVA_HOME='C:\Program Files\Microsoft\jdk-21'
+.\gradlew.bat :app:assembleDebug :app:lintDebug `
   :core:common:testDebugUnitTest :core:data:testDebugUnitTest :core:database:testDebugUnitTest `
   --no-configuration-cache --console=plain
 ```
